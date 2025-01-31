@@ -1,8 +1,9 @@
 /**
  * server.js
  *
- * A minimal ephemeral chat server using Express + Socket.IO.
- * Everyone in the same "channelUrl" sees each other's messages.
+ * Minimal ephemeral chat server w/ the following changes:
+ *  - Logs messages to the console as "[timestamp] channel: message".
+ *  - Only echoes back messages of 30 chars or less.
  */
 
 const express = require('express');
@@ -12,36 +13,40 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*"
-  }
+    cors: {
+        origin: "*"
+    }
 });
 
-// Serve a simple landing page (optional)
+// Simple landing page (optional)
 app.get('/', (req, res) => {
-  res.send('urlings ephemeral chat server is running!');
+    res.send('urlings ephemeral chat server is running!');
 });
 
-// Socket.IO ephemeral chat logic
 io.on('connection', (socket) => {
+    socket.on('joinChannel', (channelUrl) => {
+        socket.join(channelUrl);
+        console.log(`Socket ${socket.id} joined channel: ${channelUrl}`);
+    });
 
-  socket.on('joinChannel', (channelUrl) => {
-    socket.join(channelUrl);
-    console.log(`Socket ${socket.id} joined channel: ${channelUrl}`);
-  });
+    socket.on('chatMessage', ({ channelUrl, text }) => {
+        // 1) Log the message in the format: "[timestamp] channel: message"
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] ${channelUrl}: ${text}`);
 
-  socket.on('chatMessage', ({ channelUrl, text }) => {
-    // Broadcast to everyone (including sender) in that channel
-    io.to(channelUrl).emit('chatMessage', { text });
-  });
+        // 2) Only echo back if it's ≤ 30 chars
+        if (text.length <= 30) {
+            io.to(channelUrl).emit('chatMessage', { text });
+        }
+    });
 
-  socket.on('disconnect', () => {
-    console.log(`Socket ${socket.id} disconnected`);
-  });
+    socket.on('disconnect', () => {
+        console.log(`Socket ${socket.id} disconnected`);
+    });
 });
 
-// Start on port 3000 (local) or environment port
+// Start server on Render or local port 3000
 const port = process.env.PORT || 3000;
 server.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+    console.log(`Server running on http://localhost:${port}`);
 });
