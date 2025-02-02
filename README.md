@@ -1,5 +1,5 @@
 Privacy Policy for urlings
-Last Updated: 1/31/2024
+Last Updated: 1/31/2025
 
 We collect and store only the data required for chat functionality:  
 - Chat messages, active webpage domains, timestamps, and temporary socket connection data.  
