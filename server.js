@@ -19,18 +19,6 @@ app.get('/', (req, res) => {
     res.send('urlings ephemeral chat server is running!');
 });
 
-// Endpoint to return the top 5 channels by message count
-app.get('/api/topchannels', (req, res) => {
-    const channels = Object.keys(channelHistory).map(channelUrl => ({
-        name: channelUrl,
-        messageCount: channelHistory[channelUrl].length,
-        urling: channelUrl
-    }));
-    channels.sort((a, b) => b.messageCount - a.messageCount);
-    const topChannels = channels.slice(0, 5);
-    res.json(topChannels);
-});
-
 io.on('connection', (socket) => {
     socket.on('joinChannel', (channelUrl) => {
         socket.join(channelUrl);
@@ -57,6 +45,21 @@ io.on('connection', (socket) => {
             }
             io.to(channelUrl).emit('chatMessage', { text, timestamp });
         }
+    });
+
+    // Handle request for top channels
+    socket.on('getTopChannels', () => {
+        const channels = Object.keys(channelHistory);
+        const sortedChannels = channels.sort((a, b) => {
+            const countA = channelHistory[a] ? channelHistory[a].length : 0;
+            const countB = channelHistory[b] ? channelHistory[b].length : 0;
+            return countB - countA;
+        });
+        const topChannels = sortedChannels.slice(0, 5).map(ch => ({
+            channel: ch,
+            count: channelHistory[ch] ? channelHistory[ch].length : 0
+        }));
+        socket.emit('topChannels', topChannels);
     });
 
     socket.on('disconnect', () => {
