@@ -5,8 +5,14 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// In-memory storage for channel history
-const channelHistory = {};
+// Modified channel storage to include message counters
+const channelData = {
+    // Format:
+    // [channelUrl]: {
+    //     history: [],
+    //     count: 0
+    // }
+};
 
 const io = new Server(server, {
     cors: {
@@ -14,7 +20,6 @@ const io = new Server(server, {
     }
 });
 
-// Simple landing page
 app.get('/', (req, res) => {
     res.send('urlings ephemeral chat server is running!');
 });
@@ -22,43 +27,50 @@ app.get('/', (req, res) => {
 io.on('connection', (socket) => {
     socket.on('joinChannel', (channelUrl) => {
         socket.join(channelUrl);
-        console.log(`Socket ${socket.id} joined channel: ${channelUrl}`);
-        // Emit history for this channel (if any)
-        if (channelHistory[channelUrl]) {
-            socket.emit('channelHistory', channelHistory[channelUrl]);
+        if (!channelData[channelUrl]) {
+            channelData[channelUrl] = {
+                history: [],
+                count: 0
+            };
         }
+        socket.emit('channelHistory', channelData[channelUrl].history);
     });
 
     socket.on('chatMessage', ({ channelUrl, text }) => {
         const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] ${channelUrl}: ${text}`);
         if (text.length <= 30) {
-            // Save message in history
-            if (!channelHistory[channelUrl]) {
-                channelHistory[channelUrl] = [];
+            if (!channelData[channelUrl]) {
+                channelData[channelUrl] = {
+                    history: [],
+                    count: 0
+                };
             }
+
+            // Always increment the counter
+            channelData[channelUrl].count++;
+
+            // Add to history but limit to 1000 messages
             const message = { text, timestamp };
-            channelHistory[channelUrl].push(message);
-            // Optionally limit history to last 50 messages
-            if (channelHistory[channelUrl].length > 50) {
-                channelHistory[channelUrl].shift();
+            channelData[channelUrl].history.push(message);
+            if (channelData[channelUrl].history.length > 1000) {
+                channelData[channelUrl].history.shift();
             }
+
             io.to(channelUrl).emit('chatMessage', { text, timestamp });
         }
     });
 
-    // Handle request for top channels
     socket.on('getTopChannels', () => {
-        const channels = Object.keys(channelHistory);
+        const channels = Object.keys(channelData);
         const sortedChannels = channels.sort((a, b) => {
-            const countA = channelHistory[a] ? channelHistory[a].length : 0;
-            const countB = channelHistory[b] ? channelHistory[b].length : 0;
-            return countB - countA;
+            return channelData[b].count - channelData[a].count;
         });
+
         const topChannels = sortedChannels.slice(0, 5).map(ch => ({
             channel: ch,
-            count: channelHistory[ch] ? channelHistory[ch].length : 0
+            count: channelData[ch].count
         }));
+
         socket.emit('topChannels', topChannels);
     });
 
