@@ -25,8 +25,11 @@ app.get('/', (req, res) => {
 });
 
 io.on('connection', (socket) => {
+    console.log(`[${new Date().toISOString()}] Socket ${socket.id} connected`);
+
     socket.on('joinChannel', (channelUrl) => {
         socket.join(channelUrl);
+        console.log(`[${new Date().toISOString()}] Socket ${socket.id} joined channel ${channelUrl}`);
         if (!channelData[channelUrl]) {
             channelData[channelUrl] = {
                 history: [],
@@ -49,12 +52,15 @@ io.on('connection', (socket) => {
             // Always increment the counter
             channelData[channelUrl].count++;
 
-            // Add to history but limit to 1000 messages
+            // Create message and add to history (limit history to 1000 messages)
             const message = { text, timestamp };
             channelData[channelUrl].history.push(message);
             if (channelData[channelUrl].history.length > 1000) {
                 channelData[channelUrl].history.shift();
             }
+
+            // Log the chat message with timestamp and socket ID
+            console.log(`[${timestamp}] Chat message from socket ${socket.id} on channel ${channelUrl}: ${text}`);
 
             io.to(channelUrl).emit('chatMessage', { text, timestamp });
         }
@@ -75,11 +81,11 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        console.log(`Socket ${socket.id} disconnected`);
+        console.log(`[${new Date().toISOString()}] Socket ${socket.id} disconnected`);
     });
 });
 
 const port = process.env.PORT || 3000;
 server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}`);
+    console.log(`[${new Date().toISOString()}] Server running on http://localhost:${port}`);
 });
