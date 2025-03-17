@@ -5,11 +5,11 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// Modified channel storage to include message counters
+// Modified channel storage to include message counters and sender IDs in message history
 const channelData = {
     // Format:
     // [channelUrl]: {
-    //     history: [],
+    //     history: [{ text, timestamp, socketId }],
     //     count: 0
     // }
 };
@@ -49,14 +49,14 @@ io.on('connection', (socket) => {
             // Always increment the counter
             channelData[channelUrl].count++;
 
-            // Add to history but limit to 1000 messages
-            const message = { text, timestamp };
+            // Add sender's socketId to the message for client-side color generation
+            const message = { text, timestamp, socketId: socket.id };
             channelData[channelUrl].history.push(message);
             if (channelData[channelUrl].history.length > 1000) {
                 channelData[channelUrl].history.shift();
             }
 
-            io.to(channelUrl).emit('chatMessage', { text, timestamp });
+            io.to(channelUrl).emit('chatMessage', { text, timestamp, socketId: socket.id });
         }
     });
 
