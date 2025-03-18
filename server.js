@@ -5,7 +5,23 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-const channelData = {};
+// Modified channel storage to include message counters and sender color in message history
+const channelData = {
+    // Format:
+    // [channelUrl]: {
+    //     history: [{ text, timestamp, color }],
+    //     count: 0
+    // }
+};
+
+function getColorFromSocketId(socketId) {
+    let hash = 0;
+    for (let i = 0; i < socketId.length; i++) {
+        hash = socketId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash) % 360;
+    return `hsl(${hue}, 50%, 90%)`;
+}
 
 const io = new Server(server, {
     cors: {
@@ -14,29 +30,28 @@ const io = new Server(server, {
 });
 
 app.get('/', (req, res) => {
-    res.send('Urlinks ephemeral chat server is running!');
+    res.send('urlings ephemeral chat server is running!');
 });
 
 io.on('connection', (socket) => {
-    console.log(`[${new Date().toISOString()}] Socket ${socket.id} connected.`);
 
+    console.log(`[${new Date().toISOString()}] Socket ${socket.id} connected.`);
     socket.on('joinChannel', (channelUrl) => {
         socket.join(channelUrl);
-
         if (!channelData[channelUrl]) {
             channelData[channelUrl] = {
                 history: [],
                 count: 0
             };
         }
+        socket.emit('channelHistory', channelData[channelUrl].history);
 
         console.log(`[${new Date().toISOString()}] Socket ${socket.id} joined channel: ${channelUrl}`);
-        socket.emit('channelHistory', channelData[channelUrl].history);
+
     });
 
     socket.on('chatMessage', ({ channelUrl, text }) => {
         const timestamp = new Date().toISOString();
-
         if (text.length <= 300) {
             if (!channelData[channelUrl]) {
                 channelData[channelUrl] = {
@@ -45,24 +60,28 @@ io.on('connection', (socket) => {
                 };
             }
 
+            // Increment the message counter
             channelData[channelUrl].count++;
 
-            const message = { text, timestamp, socketId: socket.id };
+            // Compute color based on the socket id and include it in the message
+            const color = getColorFromSocketId(socket.id);
+            const message = { text, timestamp, color };
             channelData[channelUrl].history.push(message);
-
             if (channelData[channelUrl].history.length > 1000) {
                 channelData[channelUrl].history.shift();
             }
 
-            console.log(`[${timestamp}] [Channel: ${channelUrl}] Socket ${socket.id} says: ${text}`);
+            io.to(channelUrl).emit('chatMessage', { text, timestamp, color });
 
-            io.to(channelUrl).emit('chatMessage', message);
+            console.log(`[${timestamp}] [Channel: ${channelUrl}] Socket ${socket.id} says: ${text}`);
         }
     });
 
     socket.on('getTopChannels', () => {
         const channels = Object.keys(channelData);
-        const sortedChannels = channels.sort((a, b) => channelData[b].count - channelData[a].count);
+        const sortedChannels = channels.sort((a, b) => {
+            return channelData[b].count - channelData[a].count;
+        });
 
         const topChannels = sortedChannels.slice(0, 5).map(ch => ({
             channel: ch,
@@ -71,6 +90,7 @@ io.on('connection', (socket) => {
 
         socket.emit('topChannels', topChannels);
     });
+
 
     socket.on('disconnect', () => {
         console.log(`[${new Date().toISOString()}] Socket ${socket.id} disconnected.`);
