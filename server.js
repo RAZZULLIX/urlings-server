@@ -43,6 +43,10 @@ app.get('/', (req, res) => {
 io.on('connection', (socket) => {
     console.log(`[${new Date().toISOString()}] Socket ${socket.id} connected.`);
 
+    // Assign a default identity for this socket upon connection
+    socket.username = getDefaultUsername();
+    socket.color = getColorFromSocketId(socket.id);
+
     socket.on('joinChannel', (channelUrl) => {
         socket.join(channelUrl);
         if (!channelData[channelUrl]) {
@@ -67,13 +71,17 @@ io.on('connection', (socket) => {
             }
             channelData[channelUrl].count++;
 
-            // Use custom identity if provided and valid
-            let username = data.username && data.username.trim().length > 0 && data.username.trim().length <= 12
-                ? data.username.trim()
-                : getDefaultUsername();
-            let color = data.color && data.color.trim().length > 0
-                ? data.color.trim()
-                : getColorFromSocketId(socket.id);
+            // If a valid custom identity is provided, update the socket's stored identity.
+            if (data.username && data.username.trim().length > 0 && data.username.trim().length <= 12) {
+                socket.username = data.username.trim();
+            }
+            if (data.color && data.color.trim().length > 0) {
+                socket.color = data.color.trim();
+            }
+
+            // Use the stored identity (default or custom) for this message.
+            const username = socket.username;
+            const color = socket.color;
 
             const message = { text, timestamp, username, color };
             channelData[channelUrl].history.push(message);
