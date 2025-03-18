@@ -43,9 +43,11 @@ app.get('/', (req, res) => {
 io.on('connection', (socket) => {
     console.log(`[${new Date().toISOString()}] Socket ${socket.id} connected.`);
 
-    // Assign a default identity for this socket upon connection
-    socket.username = getDefaultUsername();
-    socket.color = getColorFromSocketId(socket.id);
+    // Save default identity on connection
+    socket.defaultUsername = getDefaultUsername();
+    socket.username = socket.defaultUsername;
+    socket.defaultColor = getColorFromSocketId(socket.id);
+    socket.color = socket.defaultColor;
 
     socket.on('joinChannel', (channelUrl) => {
         socket.join(channelUrl);
@@ -60,7 +62,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('chatMessage', (data) => {
-        const { channelUrl, text } = data;
+        const { channelUrl, text, customEnabled } = data;
         const timestamp = new Date().toISOString();
         if (text.length <= 300) {
             if (!channelData[channelUrl]) {
@@ -71,25 +73,27 @@ io.on('connection', (socket) => {
             }
             channelData[channelUrl].count++;
 
-            // If a valid custom identity is provided, update the socket's stored identity.
-            if (data.username && data.username.trim().length > 0 && data.username.trim().length <= 12) {
-                socket.username = data.username.trim();
-            }
-            if (data.color && data.color.trim().length > 0) {
-                socket.color = data.color.trim();
+            if (customEnabled) {
+                // Use the provided custom identity if valid
+                if (data.username && data.username.trim().length > 0 && data.username.trim().length <= 12) {
+                    socket.username = data.username.trim();
+                }
+                if (data.color && data.color.trim().length > 0) {
+                    socket.color = data.color.trim();
+                }
+            } else {
+                // Revert to the default identity if custom identity is disabled
+                socket.username = socket.defaultUsername;
+                socket.color = socket.defaultColor;
             }
 
-            // Use the stored identity (default or custom) for this message.
-            const username = socket.username;
-            const color = socket.color;
-
-            const message = { text, timestamp, username, color };
+            const message = { text, timestamp, username: socket.username, color: socket.color };
             channelData[channelUrl].history.push(message);
             if (channelData[channelUrl].history.length > 1000) {
                 channelData[channelUrl].history.shift();
             }
-            io.to(channelUrl).emit('chatMessage', { text, timestamp, username, color });
-            console.log(`[${timestamp}] [Channel: ${channelUrl}] ${username} (${socket.id}) says: ${text}`);
+            io.to(channelUrl).emit('chatMessage', message);
+            console.log(`[${timestamp}] [Channel: ${channelUrl}] ${socket.username} (${socket.id}) says: ${text}`);
         }
     });
 
