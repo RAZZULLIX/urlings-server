@@ -12,6 +12,7 @@ const server = http.createServer(app);
 
 /* ---------- 2. Socket.io instance ---------- */
 const io = new Server(server, {
+    maxHttpBufferSize: 1024, // 1kb
     cors: { origin: "*" }          // allow all origins (public server)
 });
 
@@ -380,3 +381,4 @@ const port = process.env.PORT || 5300;
 server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });
+
