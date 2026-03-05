@@ -376,9 +376,20 @@ io.on('connection', socket => {
     });
 });
 
+setInterval(() => {
+  for (const [channel, data] of Object.entries(channelData)) {
+    const room = io.sockets.adapter.rooms.get(channel)
+    const hasListeners = room && room.size > 0
+    if (!hasListeners && data.history.length === 0) {
+      delete channelData[channel]
+    }
+  }
+}, 60 * 1000) // every minute
+
 /* ---------- 13. Start server ---------- */
 const port = process.env.PORT || 5300;
 server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });
+
 
